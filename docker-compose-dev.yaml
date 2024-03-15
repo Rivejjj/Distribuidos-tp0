@@ -11,6 +11,14 @@ services:
     networks:
       - testing_net
 
+
+networks:
+  testing_net:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.25.125.0/24
+
   client1:
     container_name: client1
     image: client:latest
@@ -23,9 +31,14 @@ services:
     depends_on:
       - server
 
-networks:
-  testing_net:
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.25.125.0/24
+  client2:
+    container_name: client2
+    image: client:latest
+    entrypoint: /client
+    environment:
+      - CLI_ID=2
+      - CLI_LOG_LEVEL=DEBUG
+    networks:
+      - testing_net
+    depends_on:
+      - server
