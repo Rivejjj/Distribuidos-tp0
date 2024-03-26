@@ -83,7 +83,7 @@ loop:
 		case <-sigchan:
 			log.Infof("CLIENTE RECIBIO SIGTERM")
 			c.conn.Close()
-			break loop
+			return
 
 		default:
 		}
