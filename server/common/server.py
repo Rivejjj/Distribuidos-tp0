@@ -2,6 +2,7 @@ import socket
 import logging
 import signal
 from .utils import Bet, store_bets
+from .comms import Comms
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -44,22 +45,26 @@ class Server:
         client socket will also be closed
         """
         try:
-            msg = self.full_read(client_sock).rstrip().decode('utf-8')
+            comms = Comms(client_sock)
+            msg = comms.full_read().rstrip().decode('utf-8')
+            if not msg: #client disconnected
+                return
             addr = client_sock.getpeername()
-
-            bet = self.parse_bet(msg)
             logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
-            
 
-            if bet:
-                self.full_write(client_sock,f"ack {bet.document} {bet.number}")
-            else:
-                self.full_write(client_sock,f"err {bet.document} {bet.number}")
+            bets = comms.parse_bet(msg)
+            store_bets(bets)
+            
+            for bet in bets:
+                if bet:
+                    comms.full_write(client_sock,f"ack {bet.document} {bet.number}\n")
+                else:
+                    comms.full_write(client_sock,f"err {bet.document} {bet.number}\n")
 
 
         except OSError as e:
-            logging.error("action: receive_message | result: fail | error: {e}")
-        finally:            
+            logging.error(f"action: receive_message | result: fail | error: {e}")
+        finally:
             addr = client_sock.getpeername()
             self.active_clients.pop(addr[0])
             client_sock.close()
@@ -84,65 +89,3 @@ class Server:
                 logging.error("SOCKET CERRADO")
                 return None
 
-    def full_write(self,sock, msg):
-        total_sent = 0
-        #header
-        msg_len = str(len(msg))
-        msg = msg_len + "|" + msg
-
-        while total_sent < len(msg):
-            sent = sock.send("{}\n".format(msg[total_sent:]).encode('utf-8')) 
-            if sent == 0:
-                print("SOCKET CERRADO: sent = 0")
-                logging.error("action: write in socket | result: fail | error: {e}")
-                break
-
-            total_sent += sent
-        return total_sent      
-
-    def full_read(self,sock):
-        header_len = 2 #PONER COMO CONSTANTE (len en bytes)
-        bytes_read = b''
-        read = sock.recv(1024)
-        if len(read) <= 0:
-            logging.error("action: read in socket | result: fail | error: {e}")
-            return None
-
-        if read and len(read) > 2:
-            msg_len = int(read[:header_len].decode('utf-8'))
-            bytes_read += read[header_len:]
-
-            while len(bytes_read) < int(msg_len):
-                read = sock.recv(1024)
-                bytes_read += read
-                if len(read) <= 0: #codigo repetido
-                    logging.error("action: read in socket | result: fail | error: {e}")
-                    return None 
-                
-        return bytes_read
-
-    def parse_bet(self, msg):
-        """
-        The message received from the client is a string with the following format:
-        <len> | <agencia> | <nombre>|<apellido>|<documento>|<nacimiento>|<numero>
-          0         1          2          3          4           5          6
-        """        
-        categorias = msg.split("|")
-        for i in range(1,len(categorias)):
-            categoria = categorias[i].split(" ")
-            categoria.pop(0)
-            categorias[i] = " ".join(categoria)
-
-        agencia = categorias[1]
-        nombre = categorias[2]
-        apellido = categorias[3]
-        documento = categorias[4]
-        nacimiento = categorias[5]
-        numero = categorias[6]
-
-        bet = Bet(agencia, nombre, apellido, documento, nacimiento, numero)
-        bets = [bet]
-        store_bets(bets)
-        logging.info(f"action: apuesta_almacenada | result: success | dni: {documento} | numero: {numero}")
-        return bet
-        
