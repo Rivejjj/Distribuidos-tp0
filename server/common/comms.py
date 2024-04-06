@@ -39,7 +39,7 @@ class Comms:
 
         header = header.split(" ")
         total_len = int(header[1])
-        if len(message) < total_len:
+        if len(self.message) < total_len:
             print("len message: ", len(message))
             print("total len: ", total_len) 
             return False

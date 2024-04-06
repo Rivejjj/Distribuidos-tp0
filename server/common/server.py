@@ -52,8 +52,6 @@ class Server:
             addr = client_sock.getpeername()
             logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
 
-
-
             bets, batch_size = comms.parse_bet(msg)
             print("len bets: ", len(bets))
             
