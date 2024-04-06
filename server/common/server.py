@@ -52,15 +52,20 @@ class Server:
             addr = client_sock.getpeername()
             logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
 
-            bets = comms.parse_bet(msg)
-            store_bets(bets)
-            
-            for bet in bets:
-                if bet:
-                    comms.full_write(client_sock,f"ack {bet.document} {bet.number}\n")
-                else:
-                    comms.full_write(client_sock,f"err {bet.document} {bet.number}\n")
 
+
+            bets, batch_size = comms.parse_bet(msg)
+            print("len bets: ", len(bets))
+            
+            if len(bets) < int(batch_size):
+                comms.full_write(client_sock, "err")
+                return
+            else:
+                comms.full_write(client_sock, "ok")
+
+            store_bets(bets)
+            for bet in bets:
+                logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
 
         except OSError as e:
             logging.error(f"action: receive_message | result: fail | error: {e}")
