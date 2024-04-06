@@ -27,15 +27,13 @@ Luego, dentro del loop principal, se evaluan dos opciones: caso de timeout, que 
 
 ## Ejercicio 5
 
-Este ejercicio contenia varios puntos importantes, los cuales detallare por separado.
-
 ### Definicion de protocolo para envio de mensajes
 Para el intercambio de mensajes se definio un protocolo simple, el cual se espera evolucione en siguientes iteraciones.
+
 Consiste en dos partes:
 #### Mensajes de cliente a server
-Los mensajes enviados al server tienen el siguiente formato:  
-` Header | Agencia x| Nombre xx| Apellido xx| DNI xx| Nacimiento x-x-xx| Numero xx`  
-Luego, el header solo esta compuesto por la longitud del mensaje restante a leer, lo que sirve para saber cuanto seguir leyendo una vez encontrado el header.
+Los mensajes enviados al server estan conpuestos por un header conformado por la longitud del payload y el payload, que contiene los campos correspondientes para la conformacion de una apuesta separados por el caracter `|` y en el siguiente orden:  
+`header|nombre|apellido|dni|nacimiento|numero`
 
 
 #### Mensajes de server a cliente
@@ -56,24 +54,4 @@ Una vez el cliente envia los datos de la puesta y el servidor puede guardarla co
 ### Separacion de responsabilidades entre modelo de dominio y capa de comunicacion
 La idea de esta separacion es que ni el cliente ni el server conozcan la logica del envio y lectura de mensajes, situandolos en un archivo distinto.  
 Al estar apretado con el tiempo, dejare este requisito para un refactor futuro, el cual tambien contempla el movimiento de constantes y configuraciones a un archivo distinto.
-
-## Ejercicio 6
-El primer cambio necesario para este requerimiento es modificar el docker-compose file para que el cliente reciba por medio de un volumen el archivo con su dataset correspondiente, esto se hace de la misma forma que en el ejercicio 2.  
-El server, por su parte, durante cada conexion, mantiene un loop de lectura de mensajes, contandolos hasta conseguir `batch_size` mensajes, para luego procesarlos y proceder a cerrar la conexion.  
-
-### Batches
-Por cada loop en el cliente, se enviaran varias apuestas, ahora separadas por el caracter `$`.
-Luego, un mensaje tendra la siguiente forma:  
-`<header> | <agencia> | <nombre>|<apellido>|<documento>|<nacimiento>|<numero>|$`.
-
-Ahora se contempla el caso en el que finalice la lectura del archivo, la cual rompera el loop de envio de mensajes y se enviara el mensaje `"end"` al servidor para que sepa que no llegaran mas mensajes y pueda enviar el ack correspondiente sin esperar que se complete el batch.
-Finalmente, el servidor procesara todas las apuestas obtenidas.
-
-### Consideraciones de rendimiento
-Despues de cada batch, se reinicia la conexion con el cliente, de forma tal que un el server puede procesar apuestas recibidas por distintos clientes intercaladamente, esto sirve para evitar el "efecto convoy", lo que significa que un cliente con pocas apuestas que enviar no debe esperar a que otro cliente con miles de apuestas mas que el termine de enviar todas las suyas, lo que propone una gran ventaja para los clientes, pero agrega el overhead de tener que volver a establecer la conexion al menos `apuestas/batch_size` veces.
-
-
-
-
-
 
