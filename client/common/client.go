@@ -92,15 +92,24 @@ loop:
 
 		c.createClientSocket()
 
-		batch_size := 8
+		batch_size := 30
 		msg_to_sv := ""
+		last_batch := false
 		for i := 0; i < batch_size; i++ {
 			line := read_csv_line(reader, c.config.ID)
+			if line == "" {
+				last_batch = true
+				break
+			}
 			header := fmt.Sprintf("%v", len(line))
 			msg_to_sv += header + line
 		}
-
-		header := fmt.Sprintf("%v %v|", batch_size, len(msg_to_sv))
+		header := ""
+		if last_batch {
+			header = fmt.Sprintf("%v %v %v|", batch_size, len(msg_to_sv), 1)
+		} else {
+			header = fmt.Sprintf("%v %v %v|", batch_size, len(msg_to_sv), 0)
+		}
 
 		msg_to_sv = header + msg_to_sv
 		// SENDING
@@ -116,10 +125,16 @@ loop:
 				answer = strings.Split(sv_answer, " ")
 			}
 		}
+
+		if last_batch {
+			break loop
+		}
+
 		c.conn.Close()
 		// Wait a time between sending one message and the next one
 		time.Sleep(c.config.LoopPeriod)
 	}
+
 	c.conn.Close()
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 }

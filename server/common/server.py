@@ -46,7 +46,8 @@ class Server:
         """
         try:
             comms = Comms(client_sock)
-            msg = comms.full_read().rstrip().decode('utf-8')
+            msg, last_batch = comms.full_read()
+            msg = msg.rstrip().decode('utf-8')
             if not msg: #client disconnected
                 return
             addr = client_sock.getpeername()
@@ -55,11 +56,11 @@ class Server:
             bets, batch_size = comms.parse_bet(msg)
             print("len bets: ", len(bets))
             
-            if len(bets) < int(batch_size):
-                comms.full_write(client_sock, "err")
+            if not last_batch and len(bets) < int(batch_size):
+                comms.full_write(client_sock, "err\n")
                 return
             else:
-                comms.full_write(client_sock, "ok")
+                comms.full_write(client_sock, "ok\n")
 
             store_bets(bets)
             for bet in bets:

@@ -15,35 +15,41 @@ class Comms:
             return None
         self.message += read
 
-        finished = self.test_message(self.message)
-        if finished:
-            return read
+        finished_batch, last_batch = self.test_message(self.message)
+        if finished_batch:
+            return read, last_batch
         else:
-            while not finished:
+            while not finished_batch:
                 read += self.sock.recv(MAX_BLOCK_SIZE)
                 if len(read) <= 0:
                     logging.error("action: read in socket | result: fail | error: {e}")
                     return None
                 self.message += read
-                finished = self.test_message(self.message)
-        return read
+                finished_batch, last_batch = self.test_message(self.message)
+        return read, last_batch
 
 
     def test_message(self, msg):
-        message = msg.decode('utf-8')
-        header = ""
-        for i in range(len(message)):
-            if message[i] == '|':
+        finished_batch = True
+        last_batch = False
+        header = b""
+        for byte in msg:
+            if byte == ord(b'|'):
                 break
-            header += message[i]
-
+            header += bytes([byte])
+            
+        header = header.decode('utf-8')
         header = header.split(" ")
+        if header[2] == "1":
+            last_batch = True
+        
         total_len = int(header[1])
         if len(self.message) < total_len:
-            print("len message: ", len(message))
-            print("total len: ", total_len) 
-            return False
-        return True
+            print("len message: ", len(self.message))
+            print("total len: ", total_len)
+            finished_batch = False 
+
+        return finished_batch, last_batch
 
 
 
@@ -82,7 +88,6 @@ class Comms:
             bet = Bet(agencia, nombre, apellido, documento, nacimiento, numero)
             bets.append(bet)
 
-        logging.info(f"action: apuesta_almacenada | result: success | dni: {documento} | numero: {numero}")
         return bets, batch_size
         
 def split_message(msg):
