@@ -3,7 +3,6 @@ package common
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"os"
@@ -67,51 +66,28 @@ func (c *Client) StartClientLoop() {
 	}
 	defer file.Close()
 	reader := bufio.NewReader(file)
-	// total_sent := 0
-	// ack := 0
+
+	done := make(chan bool, 1)
+	go func() {
+		sig := <-sigchan
+		log.Infof("CLIENTE RECIBIO SIGTERM: %v", sig)
+		if file != nil {
+			file.Close()
+		}
+		c.conn.Close()
+		done <- true
+	}()
+	last_batch := false
 
 loop:
 	// Send messages if the loopLapse threshold has not been surpassed
-	for timeout := time.After(c.config.LoopLapse); ; {
-		select {
-		case <-timeout:
-			log.Infof("action: timeout_detected | result: success | client_id: %v",
-				c.config.ID,
-			)
-			break loop
-
-		case <-sigchan:
-			log.Infof("CLIENTE RECIBIO SIGTERM")
-			c.conn.Close()
-			return
-
-		default:
-		}
-
-		// Create the connection the server in every loop iteration. Send an
-
+	for !last_batch {
+		// Create the connection the server in every loop iteration.
 		c.createClientSocket()
 
 		batch_size := 30
-		msg_to_sv := ""
-		last_batch := false
-		for i := 0; i < batch_size; i++ {
-			line := read_csv_line(reader, c.config.ID)
-			if line == "" {
-				last_batch = true
-				break
-			}
-			header := fmt.Sprintf("%v", len(line))
-			msg_to_sv += header + line
-		}
-		header := ""
-		if last_batch {
-			header = fmt.Sprintf("%v %v %v|", batch_size, len(msg_to_sv), 1)
-		} else {
-			header = fmt.Sprintf("%v %v %v|", batch_size, len(msg_to_sv), 0)
-		}
+		msg_to_sv := create_message(batch_size, reader, c, &last_batch)
 
-		msg_to_sv = header + msg_to_sv
 		// SENDING
 		send_message(c, c.conn, msg_to_sv)
 
@@ -127,6 +103,8 @@ loop:
 		}
 
 		if last_batch {
+			file.Close()
+			c.conn.Close()
 			break loop
 		}
 
@@ -135,8 +113,12 @@ loop:
 		time.Sleep(c.config.LoopPeriod)
 	}
 
+	c.createClientSocket()
+	winners_msg := "winners|" + c.config.ID
+	send_message(c, c.conn, winners_msg)
+	sv_answer := read_message(c, c.conn)
+	log.Infof("action: consulta ganadores | result: success | client_id: %v | cantidad: %v", c.config.ID, sv_answer)
 	c.conn.Close()
-	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 }
 
 func read_csv_line(reader *bufio.Reader, id string) string {

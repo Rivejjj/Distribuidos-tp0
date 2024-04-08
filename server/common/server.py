@@ -1,8 +1,8 @@
 import socket
 import logging
 import signal
-from .utils import Bet, store_bets
-from .comms import Comms
+from .utils import Bet, store_bets, load_bets, has_won
+from .comms import Comms, split_message
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -12,6 +12,7 @@ class Server:
         self._server_socket.listen(listen_backlog)
         self.active_clients = {}
         self.running = True
+        self.ready = {}
         
     def handle_sigterm(self):
         logging.info("HANDLING SIGTERM")
@@ -53,6 +54,10 @@ class Server:
             addr = client_sock.getpeername()
             logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
 
+            if msg.startswith("winners"):
+                self.handle_winners_request(comms,msg, client_sock)
+                return
+
             bets, batch_size = comms.parse_bet(msg)
             print("len bets: ", len(bets))
             
@@ -71,7 +76,8 @@ class Server:
         finally:
             addr = client_sock.getpeername()
             self.active_clients.pop(addr[0])
-            client_sock.close()
+            if client_sock not in self.ready.values():
+                client_sock.close()
 
 
     def __accept_new_connection(self):
@@ -93,3 +99,32 @@ class Server:
                 logging.error("SOCKET CERRADO")
                 return None
 
+
+
+    def handle_winners_request(self,comms, msg, sock):
+        header, payload = split_message(msg)
+        self.ready[payload] = sock
+        if len(self.ready) < 5:
+            return
+        bets = load_bets()
+        winners = filter(has_won, bets)
+        
+        amount_of_winners = {}
+        for winner in winners: 
+            if str(winner.agency) not in amount_of_winners:
+                amount_of_winners[str(winner.agency)] = []
+            amount_of_winners[str(winner.agency)].append(winner.document)
+
+        for client in self.ready.keys():
+            client_sock = self.ready[client]
+            message = "winners: " 
+            if client in amount_of_winners.keys():
+                client_winners = amount_of_winners[client]
+                message += f" {len(client_winners)} "
+                for i in client_winners:
+                    message += " " + i
+            message += "\n"
+            comms.full_write(client_sock, message)
+
+        self.running = False  # Stop the server loop
+        logging.info("action: sorteo | result: success")

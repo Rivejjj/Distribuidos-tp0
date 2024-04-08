@@ -15,7 +15,6 @@ func read_message(c *Client, conn net.Conn) string {
 	recv, err := reader.ReadString('\n')
 	verify_recv_error(c, err)
 	bytes_read += len(recv)
-
 	for !verify_message(c, recv) {
 		read, err := reader.ReadString('\n')
 		verify_recv_error(c, err)
@@ -43,6 +42,7 @@ func read_message(c *Client, conn net.Conn) string {
 
 func verify_message(c *Client, msg string) bool {
 	header := get_header(msg)
+
 	payload_len, err := strconv.Atoi(msg[:len(header)-1])
 	if err != nil {
 		log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
@@ -94,4 +94,25 @@ func send_message(c *Client, conn net.Conn, msg string) {
 		}
 		bytes_sent += bytes
 	}
+}
+
+func create_message(batch_size int, reader *bufio.Reader, c *Client, last_batch *bool) string {
+	msg_to_sv := ""
+	for i := 0; i < batch_size; i++ {
+		line := read_csv_line(reader, c.config.ID)
+		if line == "" {
+			*last_batch = true
+			break
+		}
+		header := fmt.Sprintf("%v", len(line))
+		msg_to_sv += header + line
+	}
+	header := ""
+	if *last_batch {
+		header = fmt.Sprintf("%v %v %v|", batch_size, len(msg_to_sv), 1)
+	} else {
+		header = fmt.Sprintf("%v %v %v|", batch_size, len(msg_to_sv), 0)
+	}
+	msg_to_sv = header + msg_to_sv
+	return msg_to_sv
 }
