@@ -1,8 +1,10 @@
 import socket
 import logging
 import signal
+import multiprocessing as mp
 from .utils import Bet, store_bets, load_bets, has_won
 from .comms import Comms, split_message
+from .abstract_client import Abstract_client
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -11,12 +13,16 @@ class Server:
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
         self.active_clients = {}
+        self.client_handlers = {}
         self.running = True
         self.ready = {}
+        self.file = None
         
     def handle_sigterm(self):
         logging.info("HANDLING SIGTERM")
         self.running = False
+        if self.file:
+            self.file.close()
         for client in self.active_clients.values():
             client.close()
         self._server_socket.close()
@@ -31,54 +37,31 @@ class Server:
         """
         signal.signal(signal.SIGTERM, self.handle_sigterm)
 
+        self.file = open("bets.csv", "w")
+        lock = mp.Lock()
+
         while self.running:
             client_sock = self.__accept_new_connection()
             if client_sock:
-                self.__handle_client_connection(client_sock)
+                client_handler = Abstract_client(client_sock, self.file, lock)
+                client_handler.process.start()
+                parent_conn = client_handler.parent_conn
+                
+                self.client_handlers[client_sock] = client_handler
+
+                recv = parent_conn.recv()
+                print("recv: ", recv)
+                parent_conn.send("Hello")
+                #self.__handle_client_connection(parent_conn)
 
 
 
-    def __handle_client_connection(self, client_sock):
-        """
-        Read message from a specific client socket and closes the socket
 
-        If a problem arises in the communication with the client, the
-        client socket will also be closed
-        """
-        try:
-            comms = Comms(client_sock)
-            msg, last_batch = comms.full_read()
-            msg = msg.rstrip().decode('utf-8')
-            if not msg: #client disconnected
-                return
-            addr = client_sock.getpeername()
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
-
-            if msg.startswith("winners"):
-                self.handle_winners_request(comms,msg, client_sock)
-                return
-
-            bets, batch_size = comms.parse_bet(msg)
-            print("len bets: ", len(bets))
-            
-            if not last_batch and len(bets) < int(batch_size):
-                comms.full_write(client_sock, "err\n")
-                return
-            else:
-                comms.full_write(client_sock, "ok\n")
-
-            store_bets(bets)
-            for bet in bets:
-                logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
-
-        except OSError as e:
-            logging.error(f"action: receive_message | result: fail | error: {e}")
-        finally:
-            addr = client_sock.getpeername()
-            self.active_clients.pop(addr[0])
-            if client_sock not in self.ready.values():
-                client_sock.close()
-
+    def __handle_client_connection(self, parent_conn):
+        if parent_conn.poll():
+            recv = parent_conn.recv()
+            print("recv: ", recv)
+        
 
     def __accept_new_connection(self):
         """
