@@ -40,7 +40,6 @@ class Comms:
             
         header = header.decode('utf-8')
         header = header.split(" ")
-        print("header: ", header)
         if header[0] == "winners":
             return True, True
 
@@ -48,10 +47,12 @@ class Comms:
             last_batch = True
         
         total_len = int(header[1])
+
         if len(self.message) < total_len:
             print("len message: ", len(self.message))
             print("total len: ", total_len)
             finished_batch = False 
+
 
         return finished_batch, last_batch
 
@@ -74,6 +75,7 @@ class Comms:
 
 
     def parse_bet(self, msg):
+        print("msg: ", msg)
         header,payload = split_message(msg)
         batch_size = header.split(" ")[0]
 
@@ -83,6 +85,7 @@ class Comms:
         
         for message in messages:
             categorias = message.split("|")
+            print(categorias)
             agencia = categorias[1]
             nombre = categorias[2]
             apellido = categorias[3]
@@ -101,3 +104,5 @@ def split_message(msg):
         if msg[i] == '|':
             break
     return header, msg[len(header):]
+
+

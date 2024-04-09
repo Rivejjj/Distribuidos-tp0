@@ -18,13 +18,19 @@ class Server:
         self.ready = {}
         self.file = None
         
-    def handle_sigterm(self):
+    def handle_sigterm(self, signum, frame):
         logging.info("HANDLING SIGTERM")
         self.running = False
         if self.file:
             self.file.close()
         for client in self.active_clients.values():
             client.close()
+
+        for client_handler in self.client_handlers.values():
+            client_handler.process.join()
+            client_handler.parent_conn.close()
+            client_handler.child_conn.close()
+
         self._server_socket.close()
 
     def run(self):
@@ -46,12 +52,14 @@ class Server:
                 client_handler = Abstract_client(client_sock, self.file, lock)
                 client_handler.process.start()
                 parent_conn = client_handler.parent_conn
-                
+
                 self.client_handlers[client_sock] = client_handler
 
                 recv = parent_conn.recv()
-                print("recv: ", recv)
-                parent_conn.send("Hello")
+                if recv.startswith("winners"):
+                    self.handle_winners_request(parent_conn, recv, client_sock)
+                elif recv.startswith("final"):
+                    client_handler.process.join()
                 #self.__handle_client_connection(parent_conn)
 
 
@@ -84,11 +92,11 @@ class Server:
 
 
 
-    def handle_winners_request(self,comms, msg, sock):
+    def handle_winners_request(self,parent_conn, msg, sock):
         header, payload = split_message(msg)
         self.ready[payload] = sock
-        if len(self.ready) < 5:
-            return
+        #if len(self.ready) < 5:
+        #    return
         bets = load_bets()
         winners = filter(has_won, bets)
         
@@ -107,7 +115,7 @@ class Server:
                 for i in client_winners:
                     message += " " + i
             message += "\n"
-            comms.full_write(client_sock, message)
+            parent_conn.send(message)
 
         self.running = False  # Stop the server loop
         logging.info("action: sorteo | result: success")

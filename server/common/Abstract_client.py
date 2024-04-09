@@ -20,35 +20,60 @@ def run(conn,socket,lock):
     If a problem arises in the communication with the client, the
     client socket will also be closed
     """
+    keep_connection = True
+    while keep_connection:
+        try:
+            keep_connection = handle_connection(socket,lock,conn)
+        except Exception as e:
+            logging.error(f"action: handle_connection | result: fail | error: {e}")
+            break
+
+
+    socket.close()
+
+
+def handle_connection(socket,lock,conn):
+    """Returns true if the connection should be kept open, false otherwise"""
+
     comms = Comms(socket)
     msg, last_batch = comms.full_read()
     msg = msg.rstrip().decode('utf-8')
     if not msg: #client disconnected
-        return #??
-    
+        return False
+
     addr = socket.getpeername()
     logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
 
+    if msg.startswith("exit"):
+        socket.close()
+        conn.send("exit")
+        return False
+
     if msg.startswith("winners"):
-        conn.send(msg)
-        return
+        handle_winners_request(conn, msg, socket)
 
     bets, batch_size = comms.parse_bet(msg)
-    print("len bets: ", len(bets))
     if not last_batch and len(bets) < int(batch_size):
         comms.full_write(socket, "err\n")
-        return
     else:
         comms.full_write(socket, "ok\n")
 
     with lock:
         store_bets(bets)
-
     for bet in bets:
         logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
+    return True
 
-    socket.close()
 
 
 def get_client_id(self):
     return self.client_id
+
+
+def handle_winners_request(conn, msg, socket):
+    conn.send(msg)
+    recv = conn.recv()
+    comms = Comms(socket)
+    comms.full_write(socket, recv)
+    socket.close()
+

@@ -79,15 +79,13 @@ func (c *Client) StartClientLoop() {
 	}()
 	last_batch := false
 
+	c.createClientSocket()
 loop:
 	// Send messages if the loopLapse threshold has not been surpassed
 	for !last_batch {
-		// Create the connection the server in every loop iteration.
-		c.createClientSocket()
 
 		batch_size := 30
 		msg_to_sv := create_message(batch_size, reader, c, &last_batch)
-
 		// SENDING
 		send_message(c, c.conn, msg_to_sv)
 
@@ -104,20 +102,18 @@ loop:
 
 		if last_batch {
 			file.Close()
-			c.conn.Close()
 			break loop
 		}
 
-		c.conn.Close()
-		// Wait a time between sending one message and the next one
-		time.Sleep(c.config.LoopPeriod)
 	}
 
-	c.createClientSocket()
+	//c.createClientSocket()
 	winners_msg := "winners|" + c.config.ID
 	send_message(c, c.conn, winners_msg)
+	log.Infof("action: CONSULTA GANADORES: %v", winners_msg)
 	sv_answer := read_message(c, c.conn)
 	log.Infof("action: consulta ganadores | result: success | client_id: %v | cantidad: %v", c.config.ID, sv_answer)
+	send_message(c, c.conn, "exit|"+c.config.ID)
 	c.conn.Close()
 }
 
