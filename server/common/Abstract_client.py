@@ -45,7 +45,6 @@ def handle_connection(socket,lock,conn):
     logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
 
     if msg.startswith("exit"):
-        
         return False
 
     if msg.startswith("winners"):
@@ -73,7 +72,8 @@ def get_client_id(self):
 def handle_winners_request(conn, msg, socket):
     conn.send(msg)
     recv = conn.recv()
+    if recv[len(recv)-1] != "\n":
+        recv += conn.recv()
     comms = Comms(socket)
     comms.full_write(socket, recv)
-    #socket.close()
 

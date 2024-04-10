@@ -16,13 +16,11 @@ class Server:
         self._server_socket.listen(listen_backlog)
         self.active_clients = {}
         self.client_handlers = {}
-        self.running = True
         self.ready = {}
         self.file = None
         
     def handle_sigterm(self, signum, frame):
         logging.info("HANDLING SIGTERM")
-        #self.running = False
         if self.file:
             self.file.close()
         for client in self.active_clients.values():
@@ -86,7 +84,6 @@ class Server:
         """
         # Connection arrived
         logging.info('action: accept_connections | result: in_progress')
-        #if self.running:
         try:
             c, addr = self._server_socket.accept()
             logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
@@ -118,7 +115,6 @@ class Server:
             message += "\n"
             client_sock.send(message)
 
-        #self.running = False  # Stop the server loop
         logging.info("action: sorteo | result: success")
 
     def get_winners(self):
