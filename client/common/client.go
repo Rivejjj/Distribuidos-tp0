@@ -14,6 +14,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const LAST_FIELD = 4
+
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
 	ID            string
@@ -91,6 +93,10 @@ loop:
 
 		//READING
 		sv_answer := read_message(c, c.conn)
+		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
+			c.config.ID,
+			sv_answer)
+
 		answer := strings.Split(sv_answer, " ")
 		if answer[0] == "err" {
 			for answer[0] == "err" {
@@ -110,10 +116,10 @@ loop:
 	//c.createClientSocket()
 	winners_msg := "winners|" + c.config.ID
 	send_message(c, c.conn, winners_msg)
-	log.Infof("action: CONSULTA GANADORES: %v", winners_msg)
 	sv_answer := read_message(c, c.conn)
-	log.Infof("action: consulta ganadores | result: success | client_id: %v | cantidad: %v", c.config.ID, sv_answer)
-	send_message(c, c.conn, "exit|"+c.config.ID)
+	log.Infof("action: consulta ganadores | result: success | client_id: %v | cantidad %v", c.config.ID, sv_answer)
+	exit_msg := "exit|" + c.config.ID
+	send_message(c, c.conn, exit_msg)
 	c.conn.Close()
 }
 
@@ -127,8 +133,8 @@ func read_csv_line(reader *bufio.Reader, id string) string {
 	}
 
 	fields := strings.Split(line, ",")
-	fields[4] = strings.TrimSuffix(fields[4], "\n")
-	fields[4] = strings.TrimSuffix(fields[4], "\r")
+	fields[LAST_FIELD] = strings.TrimSuffix(fields[LAST_FIELD], "\n")
+	fields[LAST_FIELD] = strings.TrimSuffix(fields[LAST_FIELD], "\r")
 
 	msg := "|" + id
 	for i := 0; i < len(fields); i++ {

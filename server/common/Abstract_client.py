@@ -28,8 +28,8 @@ def run(conn,socket,lock):
             logging.error(f"action: handle_connection | result: fail | error: {e}")
             break
 
-
     socket.close()
+    conn.send("exit")
 
 
 def handle_connection(socket,lock,conn):
@@ -45,12 +45,12 @@ def handle_connection(socket,lock,conn):
     logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
 
     if msg.startswith("exit"):
-        socket.close()
-        conn.send("exit")
+        
         return False
 
     if msg.startswith("winners"):
         handle_winners_request(conn, msg, socket)
+        return True
 
     bets, batch_size = comms.parse_bet(msg)
     if not last_batch and len(bets) < int(batch_size):
@@ -75,5 +75,5 @@ def handle_winners_request(conn, msg, socket):
     recv = conn.recv()
     comms = Comms(socket)
     comms.full_write(socket, recv)
-    socket.close()
+    #socket.close()
 

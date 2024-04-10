@@ -2,6 +2,9 @@ import logging
 from .utils import Bet
 
 MAX_BLOCK_SIZE = 1024
+LAST_BATCH = "1"
+MSG_TYPE = 0
+LAST_BATCH_POS = 2
 
 class Comms:
     def __init__(self, sock):
@@ -40,10 +43,14 @@ class Comms:
             
         header = header.decode('utf-8')
         header = header.split(" ")
-        if header[0] == "winners":
+
+        if header[MSG_TYPE] == "exit":
             return True, True
 
-        if header[2] == "1":
+        if header[MSG_TYPE] == "winners":
+            return True, True
+
+        if header[LAST_BATCH_POS] == LAST_BATCH:
             last_batch = True
         
         total_len = int(header[1])
@@ -60,17 +67,14 @@ class Comms:
 
     def full_write(self,sock, msg):
         total_sent = 0
-
         msg_len = str(len(msg))
         msg = msg_len + "|" + msg
-
         while total_sent < len(msg):
             sent = sock.send("{}".format(msg[total_sent:]).encode('utf-8')) 
             if sent == 0:
                 logging.error(f"action: write in socket | result: fail | error: {sent}")
                 break
             total_sent += sent
-
         return total_sent      
 
 

@@ -32,10 +32,6 @@ func read_message(c *Client, conn net.Conn) string {
 		verify_recv_error(c, err)
 		bytes_read += len(read)
 	}
-	log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
-		c.config.ID,
-		recv,
-	)
 	// Return the message without the header
 	return recv[header_len:]
 }
@@ -109,6 +105,7 @@ func create_message(batch_size int, reader *bufio.Reader, c *Client, last_batch 
 	}
 	header := ""
 	if *last_batch {
+		//header: batch_size, payload_len, (0 = not last batch, 1 = last batch)
 		header = fmt.Sprintf("%v %v %v|", batch_size, len(msg_to_sv), 1)
 	} else {
 		header = fmt.Sprintf("%v %v %v|", batch_size, len(msg_to_sv), 0)
