@@ -27,15 +27,13 @@ Luego, dentro del loop principal, se evaluan dos opciones: caso de timeout, que 
 
 ## Ejercicio 5
 
-Este ejercicio contenia varios puntos importantes, los cuales detallare por separado.
-
 ### Definicion de protocolo para envio de mensajes
 Para el intercambio de mensajes se definio un protocolo simple, el cual se espera evolucione en siguientes iteraciones.
+
 Consiste en dos partes:
 #### Mensajes de cliente a server
-Los mensajes enviados al server tienen el siguiente formato:  
-` Header | Agencia x| Nombre xx| Apellido xx| DNI xx| Nacimiento x-x-xx| Numero xx`  
-Luego, el header solo esta compuesto por la longitud del mensaje restante a leer, lo que sirve para saber cuanto seguir leyendo una vez encontrado el header.
+Los mensajes enviados al server estan conpuestos por un header conformado por la longitud del payload y el payload, que contiene los campos correspondientes para la conformacion de una apuesta separados por el caracter `|` y en el siguiente orden:  
+`header|nombre|apellido|dni|nacimiento|numero`
 
 
 #### Mensajes de server a cliente
