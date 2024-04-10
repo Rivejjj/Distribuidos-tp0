@@ -33,11 +33,17 @@ class Comms:
         finished_batch = True
         last_batch = False
         header = b""
+        finished_header = False
         for byte in msg:
             if byte == ord(b'|'):
+                finished_header = True
+                finished_batch = False
                 break
             header += bytes([byte])
-            
+
+        if not finished_header:
+            return finished_batch, last_batch
+
         header = header.decode('utf-8')
         header = header.split(" ")
         if header[2] == "1":
