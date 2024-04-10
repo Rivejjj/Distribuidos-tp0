@@ -17,7 +17,7 @@ Dentro de la carpeta `server_test`, ejecutar `./test.sh`para ejecutar el script,
 ## Ejercicio 4
 Se añadieron handlers de `SIGTERM` en ambos server y client. Los cuales funcionan dela siguiente manera:
 #### Server
-Al principio de la funcion de loop del server, antes de empezar el loop, declaro,  usando la libreria signal, la funcion a ejecutar una vez recibida la signal `SIGTERM`. En este caso, lo que realiza la funcion la cual llame `handle_sigterm` es setear el campo `running` del servidor en `False` y cerrar todos los sockets de clientes activos y por ultimo, cerrar el socket del server.
+Al principio de la funcion de loop del server andes de empezar el loop, declaro,  usando la libreria signal, cual va a ser la funcion a ejecutar una vez recibida la signal `SIGTERM`. En este caso, lo que realiza la funcion la cual llame `handle_sigterm` es setear el campo `running` del servidor en `False` y cerrar todos los sockets de clientes activos y por ultimo, cerrar el socket del server.
 
 #### Cliente
 De la misma forma que en el server, se declara un canal por el cual entrara la señal `SIGTERM`, lo que significa que, en caso de que se escriba algo por ese canal, significa que el programa recibio la signal.
@@ -62,47 +62,60 @@ El server, por su parte, durante cada conexion, mantiene un loop de lectura de m
 ### Batches
 Por cada loop en el cliente, se enviaran varias apuestas, ahora separadas por el caracter `$`.
 Luego, un mensaje tendra la siguiente forma:  
-`<header> | <agencia> | <nombre>|<apellido>|<documento>|<nacimiento>|<numero>|$`.
+`<header>|<Apuesta1>$<Apuesta2>$ ...`
 
-Ahora se contempla el caso en el que finalice la lectura del archivo, la cual rompera el loop de envio de mensajes y se enviara el mensaje `"end"` al servidor para que sepa que no llegaran mas mensajes y pueda enviar el ack correspondiente sin esperar que se complete el batch.  
-A medida que van llegando apuestas al servidor, se almacenan en una lista que luego sera utilizada en la funcion provista por la catedra `store bets`.  
-Finalmente, se procesa todas las apuestas obtenidas y se envia la respuesta correspondiente. Finalmente descartando la lista, y creando una nueva por cada batch, evitando guardar todo el archivo en memoria.
+Todo ese mensaje tendra un header compuesto por los siguientes campos:  
+`<batch size> <long. de mensaje> <ultimo batch>`
 
+El campo ultimo batch tendra el valor 1 si es el ultimo, y 0 si quedan batches por enviar.
+En el caso de recibir un mensaje `err`, se vuelve a enviar el batch y a esperar respuesta hasta que la misma sea satisfactoria. 
 
 ### Consideraciones de rendimiento
 Despues de cada batch, se reinicia la conexion con el cliente, de forma tal que un el server puede procesar apuestas recibidas por distintos clientes intercaladamente, esto sirve para evitar el "efecto convoy", lo que significa que un cliente con pocas apuestas que enviar no debe esperar a que otro cliente con miles de apuestas mas que el termine de enviar todas las suyas, lo que propone una gran ventaja para los clientes, pero agrega el overhead de tener que volver a establecer la conexion al menos `apuestas/batch_size` veces.
 
-## Ejercicio 7
-Durante la implementacion de este ejercicio, surgio el problema: una vez que un cliente termina de enviar sus apuestas y envia el nuevo mensaje `win`, para consultar sus ganadores correspondientes, debia esperar a que terminen el resto de clientes de enviar sus apuestas, lo que provocaba que se lea un string vacio y no se espere a que el server le envie los ganadores. Lo solucione haciendo que una vez que el cliente termine, se quede leyendo por el socket hasta poder leer el mensaje de respuesta del cliente (no es la mejor solucion pero me encontraba con muy poco tiempo y tenia que hacerlo funcionar).
+## Ejercicio 7 
 
-### Modificaciones en el server
-Ahora el server debe llevar la cuenta de la cantidad de clientes que terminaron de enviar apuestas, para que una vez hayan terminado todos, realizar el sorteo.
-Tambien, al recibir el mensaje `win`, el servidor guarda los socket correspondientes a pedidos de ganadores en un diccionario propio, usando el numero de cliente como llave, y luego, se usara una vez terminado el sorteo para comunicarle el resultado a cada cliente.
+### Cliente
+Una vez que el cliente termina de enviar todas las apuestas, crea otra conexion con el server, envia el mensaje de consulta de ganadores y queda esperando por la respuesta. 
 
-### Modificaciones en el cliente
-Una vez que termine de enviar todas las apuestas, y recibe el ack del server, marca como terminada la lectura y rompe el loop de envio y crea la nueva conexion por la cual enviara el mensaje de pedido de ganadores y recibira la respuesta.
+### Server
+Ahora el server debe llevar la cuenta de la cantidad de clientes que terminaron de enviar apuestas, para que una vez hayan terminado todos, realizar el sorteo. Al recibir el mensaje `winners`, el servidor guarda los socket correspondientes a pedidos de ganadores en un diccionario propio, usando el numero de agencia como llave, y luego, se usara una vez terminado el sorteo para comunicarle el resultado a cada cliente.  
+Una vez que el tamaño del diccionario alcance la cantidad de clientes, se realizara el sorteo. 
 
 ### Sorteo
-El sorteo se ejecutara con las bets recibidas, y utilizando las funciones provistas por la catedra. Se cuenta la cantidad de ganadores y se guarda en un diccionario, utilizando como llave el numero de agencia, una lista de DNIs de ganadores.  
-Esta lista se utilizara posteriormente para enviar la respuesta a los clientes, obteniendo el socket de cada uno del diccionario guardado anteriormente en el server. 
+El sorteo se ejecutara con las bets recibidas, y utilizando las funciones provistas por la catedra. Se cuenta la cantidad de ganadores y se guarda en un diccionario, utilizando como llave el numero de agencia, una lista de DNIs de ganadores.
+Esta lista se utilizara posteriormente para enviar la respuesta a los clientes, obteniendo el socket de cada uno del diccionario guardado anteriormente en el server.
+
 
 ## Ejercicio 8
-No llegue con el tiempo a realizar el ejercicio 8 porque no estime correctamente las dificultades que iba a tener con la realizacion del TP, pero tengo un planteamiento y varios pasos a seguir para su desarrollo. 
-
-Antes de realizar el ejercicio, realizo un analisis de los pasos a seguir.
 
 Para poder conseguir paralelismo en el servidor tendre que utilizar la libreria `multiprocessing`, para poder evitar el GIL, utilizando subprocesos en vez de threads.
 
-Por cada subproceso creado, el servidor debera tener un subproceso por cliente, llamado Abstract client, luego, el servidor solo se comunicara con sus abstracciones de un cliente, las cuales se ejecutan en paralelo.
+El servidor debera tener un subproceso por cliente, llamado Abstract client. luego, solo se comunicara con sus abstracciones de un cliente, las cuales se ejecutan en paralelo.
 
 ![alt text](images/image.png)
 
 Con esta imagen se pueden apreciar las dependencias: 
-+ Un Abstractclient esta compuesto por un cliente y un server ya que  no puede existir sin ellos.
++ Un Abstractclient esta compuesto por un cliente y un server ya que no puede existir sin ellos.
 + Un server tiene N Abstractclients, dependiendo de las conexiones con clientes que necesite.
 
-Para esto cuento la desventaja de necesitar un refactor el cual separe la logica de comunicacion de la de negocio, ya que estan muy solapadas y el codigo se volvio muy intrincado.
 
-Una vez separe ambas partes, la comunicacion entre procesos estara dada a traves de pipes que provee la libreria `multiprocessing`, cada Abstractclient tendra un pipe de comunicacion con el servidor y el socket proveido por el servidor al momento de su creacion para poder comunicarse con el cliente.
+### Cliente
 
-La logica de eleccion de ganador permanecera en el server, y una vez se cumplan las condiciones, este le informara a cada Abstractclient los ganadores, y este, a su vez, se los comunicara a su cliente asociado.
+Al ya no ser necesario evitar el Convoy Effect por paralelismo del server de procesar mensajes y aceptar conexiones, el cliente mantiene una sola conexion a lo largo de toda su ejecucion. 
+
+
+### Abstract client
+
+Esta abstraccion del cliente por parte del server es la que se comunicara con el cliente y se encargara de procesar los mensajes recibidos y guardar apuestas, de esa forma, el servidor puede encargarse de aceptar nuevas conexiones sin verse interrumpido con el procesamiento de mensajes.
+
+Al momento de la creacion recibe el archivo junto con un lock, entonces, debera pedir el lock cada vez que necesite guardar las apuestas recibidas y asi evitar race conditions para modificar el archivo.
+
+La clase cuenta un Pipe para la comunicacion con el server, por el cual solo envia dos mensajes: `winners` y `exit` dependiendo el caso.
+Para el primer caso, una vez enviado el mensaje, espera la respuesta del server y se la reenvia al cliente. En el segundo caso, una vez que el cliente le avisa que termina la conexion, cierra el socket con el cliente y le envia el mensaje al server avisando que puede hacer join del proceso.
+
+### Server
+
+El server ahora cada vez que recibe una conexion, crea un Abstract client y lo guarda en un diccionario utilizando el socket del cliente como llave. Una vez que tiene la cantidad de clientes activos deseada, empieza a leer de a uno de los Pipes de sus Abstract Clients hasta haber enviado los ganadores y posteriormente, joineado todos los procesos.
+
+El server continua teniendo la logica de sorteo, por lo cual necesita comunicarse con los procesos para enviar los resultados.

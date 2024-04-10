@@ -4,7 +4,7 @@ import signal
 import multiprocessing as mp
 from .utils import Bet, store_bets, load_bets, has_won
 from .comms import Comms, split_message
-from .abstract_client import Abstract_client
+from .Abstract_client import Abstract_client
 
 CANTIDAD_CLIENTES = 5
 
