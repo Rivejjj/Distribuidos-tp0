@@ -55,3 +55,21 @@ Una vez el cliente envia los datos de la puesta y el servidor puede guardarla co
 La idea de esta separacion es que ni el cliente ni el server conozcan la logica del envio y lectura de mensajes, situandolos en un archivo distinto.  
 Al estar apretado con el tiempo, dejare este requisito para un refactor futuro, el cual tambien contempla el movimiento de constantes y configuraciones a un archivo distinto.
 
+## Ejercicio 6
+El primer cambio necesario para este requerimiento es modificar el docker-compose file para que el cliente reciba por medio de un volumen el archivo con su dataset correspondiente, esto se hace de la misma forma que en el ejercicio 2.  
+El server, por su parte, durante cada conexion, mantiene un loop de lectura de mensajes, contandolos hasta conseguir `batch_size` mensajes, para luego procesarlos y proceder a cerrar la conexion.  
+
+### Batches
+Por cada loop en el cliente, se enviaran varias apuestas, ahora separadas por el caracter `$`.
+Luego, un mensaje tendra la siguiente forma:  
+`<header>|<Apuesta1>$<Apuesta2>$ ...`
+
+Todo ese mensaje tendra un header compuesto por los siguientes campos:  
+`<batch size> <long. de mensaje> <ultimo batch>`
+
+El campo ultimo batch tendra el valor 1 si es el ultimo, y 0 si quedan batches por enviar.
+En el caso de recibir un mensaje `err`, se vuelve a enviar el batch y a esperar respuesta hasta que la misma sea satisfactoria. 
+
+### Consideraciones de rendimiento
+Despues de cada batch, se reinicia la conexion con el cliente, de forma tal que un el server puede procesar apuestas recibidas por distintos clientes intercaladamente, esto sirve para evitar el "efecto convoy", lo que significa que un cliente con pocas apuestas que enviar no debe esperar a que otro cliente con miles de apuestas mas que el termine de enviar todas las suyas, lo que propone una gran ventaja para los clientes, pero agrega el overhead de tener que volver a establecer la conexion al menos `apuestas/batch_size` veces.
+
