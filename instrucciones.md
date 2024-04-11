@@ -85,3 +85,37 @@ Una vez que el tamaño del diccionario alcance la cantidad de clientes, se reali
 ### Sorteo
 El sorteo se ejecutara con las bets recibidas, y utilizando las funciones provistas por la catedra. Se cuenta la cantidad de ganadores y se guarda en un diccionario, utilizando como llave el numero de agencia, una lista de DNIs de ganadores.
 Esta lista se utilizara posteriormente para enviar la respuesta a los clientes, obteniendo el socket de cada uno del diccionario guardado anteriormente en el server.
+
+## Ejercicio 8
+
+Para poder conseguir paralelismo en el servidor tendre que utilizar la libreria `multiprocessing`, para poder evitar el GIL, utilizando subprocesos en vez de threads.
+
+El servidor debera tener un subproceso por cliente, llamado Abstract client. luego, solo se comunicara con sus abstracciones de un cliente, las cuales se ejecutan en paralelo.
+
+![alt text](images/image.png)
+
+Con esta imagen se pueden apreciar las dependencias: 
++ Un Abstractclient esta compuesto por un cliente y un server ya que no puede existir sin ellos.
++ Un server tiene N Abstractclients, dependiendo de las conexiones con clientes que necesite.
+
+
+### Cliente
+
+Al ya no ser necesario evitar el Convoy Effect por paralelismo del server de procesar mensajes y aceptar conexiones, el cliente mantiene una sola conexion a lo largo de toda su ejecucion. 
+
+
+### Abstract client
+
+Esta abstraccion del cliente por parte del server es la que se comunicara con el cliente y se encargara de procesar los mensajes recibidos y guardar apuestas, de esa forma, el servidor puede encargarse de aceptar nuevas conexiones sin verse interrumpido con el procesamiento de mensajes.
+
+Al momento de la creacion recibe el archivo junto con un lock, entonces, debera pedir el lock cada vez que necesite guardar las apuestas recibidas y asi evitar race conditions para modificar el archivo.
+
+La clase cuenta un Pipe para la comunicacion con el server, por el cual solo envia dos mensajes: `winners` y `exit` dependiendo el caso.
+Para el primer caso, una vez enviado el mensaje, espera la respuesta del server y se la reenvia al cliente. En el segundo caso, una vez que el cliente le avisa que termina la conexion, cierra el socket con el cliente y le envia el mensaje al server avisando que puede hacer join del proceso.
+
+### Server
+
+El server ahora cada vez que recibe una conexion, crea un Abstract client y lo guarda en un diccionario utilizando el socket del cliente como llave. Una vez que tiene la cantidad de clientes activos deseada, empieza a leer de a uno de los Pipes de sus Abstract Clients hasta haber enviado los ganadores y posteriormente, joineado todos los procesos.
+
+El server continua teniendo la logica de sorteo, por lo cual necesita comunicarse con los procesos para enviar los resultados.
+

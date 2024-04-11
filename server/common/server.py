@@ -1,8 +1,12 @@
 import socket
 import logging
 import signal
+import multiprocessing as mp
 from .utils import Bet, store_bets, load_bets, has_won
 from .comms import Comms, split_message
+from .Abstract_client import Abstract_client
+
+CANTIDAD_CLIENTES = 5
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -11,14 +15,22 @@ class Server:
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
         self.active_clients = {}
-        self.running = True
+        self.client_handlers = {}
         self.ready = {}
+        self.file = None
         
-    def handle_sigterm(self):
+    def handle_sigterm(self, signum, frame):
         logging.info("HANDLING SIGTERM")
-        self.running = False
+        if self.file:
+            self.file.close()
         for client in self.active_clients.values():
             client.close()
+
+        for client_handler in self.client_handlers.values():
+            client_handler.process.join()
+            client_handler.parent_conn.close()
+            client_handler.child_conn.close()
+
         self._server_socket.close()
 
     def run(self):
@@ -31,53 +43,36 @@ class Server:
         """
         signal.signal(signal.SIGTERM, self.handle_sigterm)
 
-        while self.running:
+        self.file = open("bets.csv", "w")
+        lock = mp.Lock()
+
+        amount_of_connections = 0
+        while amount_of_connections < CANTIDAD_CLIENTES:
             client_sock = self.__accept_new_connection()
             if client_sock:
-                self.__handle_client_connection(client_sock)
+                client_handler = Abstract_client(client_sock, self.file, lock)
+                client_handler.process.start()
+                self.client_handlers[client_sock] = client_handler
+                amount_of_connections += 1
+
+        while amount_of_connections > 0:
+            amount_of_connections = self.read_from_clients(amount_of_connections)
+
+        self._server_socket.close()
 
 
-
-    def __handle_client_connection(self, client_sock):
-        """
-        Read message from a specific client socket and closes the socket
-
-        If a problem arises in the communication with the client, the
-        client socket will also be closed
-        """
-        try:
-            comms = Comms(client_sock)
-            msg, last_batch = comms.full_read()
-            msg = msg.rstrip().decode('utf-8')
-            if not msg: #client disconnected
-                return
-            addr = client_sock.getpeername()
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
-
-            if msg.startswith("winners"):
-                self.handle_winners_request(comms,msg, client_sock)
-                return
-
-            bets, batch_size = comms.parse_bet(msg)
-            print("len bets: ", len(bets))
-            
-            if not last_batch and len(bets) < int(batch_size):
-                comms.full_write(client_sock, "err\n")
-                return
-            else:
-                comms.full_write(client_sock, "ok\n")
-
-            store_bets(bets)
-            for bet in bets:
-                logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
-
-        except OSError as e:
-            logging.error(f"action: receive_message | result: fail | error: {e}")
-        finally:
-            addr = client_sock.getpeername()
-            self.active_clients.pop(addr[0])
-            if client_sock not in self.ready.values():
-                client_sock.close()
+    def read_from_clients(self, amount):
+        handlers = list(self.client_handlers.values())
+        for handler in handlers:
+            conn = handler.parent_conn
+            if conn.poll():
+                recv = conn.recv()
+                if recv.startswith("winners"):
+                    self.handle_winners_request(conn, recv)
+                elif recv.startswith("exit"):
+                    handler.process.join()
+                    self.client_handlers.pop(handler.sock)
+        return len(self.client_handlers)
 
 
     def __accept_new_connection(self):
@@ -89,42 +84,45 @@ class Server:
         """
         # Connection arrived
         logging.info('action: accept_connections | result: in_progress')
-        if self.running:
-            try:
-                c, addr = self._server_socket.accept()
-                logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
-                self.active_clients[addr[0]] = c
-                return c
-            except:
-                logging.error("SOCKET CERRADO")
-                return None
+        try:
+            c, addr = self._server_socket.accept()
+            logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
+            self.active_clients[addr[0]] = c
+            return c
+        except:
+            logging.error("SOCKET CERRADO")
+            return None
 
 
 
-    def handle_winners_request(self,comms, msg, sock):
+    def handle_winners_request(self,parent_conn, msg):
         header, payload = split_message(msg)
-        self.ready[payload] = sock
-        if len(self.ready) < 5:
+        self.ready[payload] = parent_conn
+        if len(self.ready) < CANTIDAD_CLIENTES:
             return
-        bets = load_bets()
-        winners = filter(has_won, bets)
         
-        amount_of_winners = {}
-        for winner in winners: 
-            if str(winner.agency) not in amount_of_winners:
-                amount_of_winners[str(winner.agency)] = []
-            amount_of_winners[str(winner.agency)].append(winner.document)
+        amount_of_winners = self.get_winners()
 
         for client in self.ready.keys():
             client_sock = self.ready[client]
             message = "winners: " 
+
             if client in amount_of_winners.keys():
                 client_winners = amount_of_winners[client]
                 message += f" {len(client_winners)} "
                 for i in client_winners:
                     message += " " + i
             message += "\n"
-            comms.full_write(client_sock, message)
+            client_sock.send(message)
 
-        self.running = False  # Stop the server loop
         logging.info("action: sorteo | result: success")
+
+    def get_winners(self):
+        bets = load_bets()
+        winners = filter(has_won, bets)
+        amount_of_winners = {}
+        for winner in winners: 
+            if str(winner.agency) not in amount_of_winners:
+                amount_of_winners[str(winner.agency)] = []
+            amount_of_winners[str(winner.agency)].append(winner.document)
+        return amount_of_winners

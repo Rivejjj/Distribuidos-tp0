@@ -2,6 +2,9 @@ import logging
 from .utils import Bet
 
 MAX_BLOCK_SIZE = 1024
+LAST_BATCH = "1"
+MSG_TYPE = 0
+LAST_BATCH_POS = 2
 
 class Comms:
     def __init__(self, sock):
@@ -33,31 +36,40 @@ class Comms:
         finished_batch = True
         last_batch = False
         header = b""
-        finished_header = False
+        header_finished = False
         for byte in msg:
             if byte == ord(b'|'):
-                finished_header = True
-                finished_batch = False
+                header_finished = True
+
                 break
             header += bytes([byte])
 
         if not finished_header:
             return finished_batch, last_batch
             
+        if not header_finished:
+            finished_batch = False
+            return finished_batch, last_batch
+
         header = header.decode('utf-8')
         header = header.split(" ")
-        print("header: ", header)
-        if header[0] == "winners":
+
+        if header[MSG_TYPE] == "exit":
             return True, True
 
-        if header[2] == "1":
+        if header[MSG_TYPE] == "winners":
+            return True, True
+
+        if header[LAST_BATCH_POS] == LAST_BATCH:
             last_batch = True
         
         total_len = int(header[1])
+
         if len(self.message) < total_len:
             print("len message: ", len(self.message))
             print("total len: ", total_len)
             finished_batch = False 
+
 
         return finished_batch, last_batch
 
@@ -65,21 +77,19 @@ class Comms:
 
     def full_write(self,sock, msg):
         total_sent = 0
-
         msg_len = str(len(msg))
         msg = msg_len + "|" + msg
-
         while total_sent < len(msg):
             sent = sock.send("{}".format(msg[total_sent:]).encode('utf-8')) 
             if sent == 0:
                 logging.error(f"action: write in socket | result: fail | error: {sent}")
                 break
             total_sent += sent
-
         return total_sent      
 
 
     def parse_bet(self, msg):
+        print("msg: ", msg)
         header,payload = split_message(msg)
         batch_size = header.split(" ")[0]
 
@@ -89,6 +99,7 @@ class Comms:
         
         for message in messages:
             categorias = message.split("|")
+            print(categorias)
             agencia = categorias[1]
             nombre = categorias[2]
             apellido = categorias[3]
@@ -107,3 +118,5 @@ def split_message(msg):
         if msg[i] == '|':
             break
     return header, msg[len(header):]
+
+

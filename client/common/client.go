@@ -14,6 +14,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const LAST_FIELD = 4
+
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
 	ID            string
@@ -79,20 +81,22 @@ func (c *Client) StartClientLoop() {
 	}()
 	last_batch := false
 
+	c.createClientSocket()
 loop:
 	// Send messages if the loopLapse threshold has not been surpassed
 	for !last_batch {
-		// Create the connection the server in every loop iteration.
-		c.createClientSocket()
 
 		batch_size := 30
 		msg_to_sv := create_message(batch_size, reader, c, &last_batch)
-
 		// SENDING
 		send_message(c, c.conn, msg_to_sv)
 
 		//READING
 		sv_answer := read_message(c, c.conn)
+		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
+			c.config.ID,
+			sv_answer)
+
 		answer := strings.Split(sv_answer, " ")
 		if answer[0] == "err" {
 			for answer[0] == "err" {
@@ -104,20 +108,18 @@ loop:
 
 		if last_batch {
 			file.Close()
-			c.conn.Close()
 			break loop
 		}
 
-		c.conn.Close()
-		// Wait a time between sending one message and the next one
-		time.Sleep(c.config.LoopPeriod)
 	}
 
-	c.createClientSocket()
+	//c.createClientSocket()
 	winners_msg := "winners|" + c.config.ID
 	send_message(c, c.conn, winners_msg)
 	sv_answer := read_message(c, c.conn)
-	log.Infof("action: consulta ganadores | result: success | client_id: %v | cantidad: %v", c.config.ID, sv_answer)
+	log.Infof("action: consulta ganadores | result: success | client_id: %v | cantidad %v", c.config.ID, sv_answer)
+	exit_msg := "exit|" + c.config.ID
+	send_message(c, c.conn, exit_msg)
 	c.conn.Close()
 }
 
@@ -131,8 +133,8 @@ func read_csv_line(reader *bufio.Reader, id string) string {
 	}
 
 	fields := strings.Split(line, ",")
-	fields[4] = strings.TrimSuffix(fields[4], "\n")
-	fields[4] = strings.TrimSuffix(fields[4], "\r")
+	fields[LAST_FIELD] = strings.TrimSuffix(fields[LAST_FIELD], "\n")
+	fields[LAST_FIELD] = strings.TrimSuffix(fields[LAST_FIELD], "\r")
 
 	msg := "|" + id
 	for i := 0; i < len(fields); i++ {
