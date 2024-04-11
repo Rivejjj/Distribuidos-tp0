@@ -14,7 +14,6 @@ class Comms:
             logging.error("action: read in socket | result: fail | error: {e}")
             return None
         self.message += read
-
         finished_batch, last_batch = self.test_message(self.message)
         if finished_batch:
             return read, last_batch
@@ -30,6 +29,7 @@ class Comms:
 
 
     def test_message(self, msg):
+        #returns a tuple with two booleans, the first one indicates if the batch is finished, the second one indicates if it is the last batch
         finished_batch = True
         last_batch = False
         header = b""
@@ -46,6 +46,10 @@ class Comms:
 
         header = header.decode('utf-8')
         header = header.split(" ")
+        print("header: ", header)
+        if header[0] == "winners":
+            return True, True
+
         if header[2] == "1":
             last_batch = True
         
