@@ -43,7 +43,7 @@ class Comms:
 
         if not finished_header:
             return finished_batch, last_batch
-            
+
         header = header.decode('utf-8')
         header = header.split(" ")
         print("header: ", header)
