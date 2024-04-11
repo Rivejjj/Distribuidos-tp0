@@ -40,8 +40,12 @@ class Comms:
         for byte in msg:
             if byte == ord(b'|'):
                 header_finished = True
+
                 break
             header += bytes([byte])
+
+        if not finished_header:
+            return finished_batch, last_batch
             
         if not header_finished:
             finished_batch = False

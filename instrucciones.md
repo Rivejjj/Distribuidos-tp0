@@ -86,7 +86,6 @@ Una vez que el tamaño del diccionario alcance la cantidad de clientes, se reali
 El sorteo se ejecutara con las bets recibidas, y utilizando las funciones provistas por la catedra. Se cuenta la cantidad de ganadores y se guarda en un diccionario, utilizando como llave el numero de agencia, una lista de DNIs de ganadores.
 Esta lista se utilizara posteriormente para enviar la respuesta a los clientes, obteniendo el socket de cada uno del diccionario guardado anteriormente en el server.
 
-
 ## Ejercicio 8
 
 Para poder conseguir paralelismo en el servidor tendre que utilizar la libreria `multiprocessing`, para poder evitar el GIL, utilizando subprocesos en vez de threads.
@@ -119,3 +118,4 @@ Para el primer caso, una vez enviado el mensaje, espera la respuesta del server 
 El server ahora cada vez que recibe una conexion, crea un Abstract client y lo guarda en un diccionario utilizando el socket del cliente como llave. Una vez que tiene la cantidad de clientes activos deseada, empieza a leer de a uno de los Pipes de sus Abstract Clients hasta haber enviado los ganadores y posteriormente, joineado todos los procesos.
 
 El server continua teniendo la logica de sorteo, por lo cual necesita comunicarse con los procesos para enviar los resultados.
+
