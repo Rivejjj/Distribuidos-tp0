@@ -1,3 +1,7 @@
+# Repaso de Docker
+
+## Ejercicio 1
+
 El programa ```create_docker_compose.py``` crea un archivo copiando ```docker-compose-dev.yaml```, y segun el numero recibido por parametro, escribe en el archivo la cantidad de clientes deseada, y finalmente, reemplaza el archivo.
 
 Para ejecutar, correr la siguiente instruccion por linea de comandos:  
@@ -18,3 +22,36 @@ Al principio de la funcion de loop del server andes de empezar el loop, declaro,
 #### Cliente
 De la misma forma que en el server, se declara un canal por el cual entrara la señal `SIGTERM`, lo que significa que, en caso de que se escriba algo por ese canal, significa que el programa recibio la signal.
 Luego, dentro del loop principal, se evaluan dos opciones: caso de timeout, que no nos interesa en este caso y caso `sigchan`, donde se procedera a cerrar la conexion del cliente y salir de la funcion.
+
+# Comunicación
+
+## Ejercicio 5
+
+### Definicion de protocolo para envio de mensajes
+Para el intercambio de mensajes se definio un protocolo simple, el cual se espera evolucione en siguientes iteraciones.
+
+Consiste en dos partes:
+#### Mensajes de cliente a server
+Los mensajes enviados al server estan conpuestos por un header conformado por la longitud del payload y el payload, que contiene los campos correspondientes para la conformacion de una apuesta separados por el caracter `|` y en el siguiente orden:  
+`header|nombre|apellido|dni|nacimiento|numero`
+
+
+#### Mensajes de server a cliente
+Aprovechando la funcion de lectura utilizada previamente en el cliente `ReadString('\n')`, el cliente le respondera al cliente mensajes con la siguiente estructura:  
+`Header | ack/err bet.document bet.number\n`  
+Con el payload del mensaje separado por espacios (`" "`), siendo la primera palabra ack en caso de que se haya podido guardar la apuesta correctamente, y err en caso contrario.  
+En caso de error, se descarta la apuesta.  
+Luego, el servidor leera lo que encuentre en el socket hasta encontrarse con el caracter `\n`, el cual significara el fin del mensaje.  
+
+### Evitar short reads y short writes
+Para esto, se implementarion funciones tal que, sabiendo a naturaleza de los sockets de no siempre enviar o leen todo lo requerido al momento de llamar las funciones propias, cuentan la cantidad de bytes leidos o escritos segun corresponda, y en caso de que no sea suficiente, se entra en un loop en el cual se repite la accion hasta poder obtener la cantidad necesaria para proceder.  
+En este caso, se entra en el loop hasta encontrar el caracter `\n`.
+
+### Logica de negocios
+Se declararon variables en el `env` del cliente en el archivo `docker-compose-dev.yaml` los cuales se utilizara para conformar el mensaje siguiendo el protocolo.
+Una vez el cliente envia los datos de la puesta y el servidor puede guardarla correctamente, se imprimira por el log el mensaje correspondiente.
+
+### Separacion de responsabilidades entre modelo de dominio y capa de comunicacion
+La idea de esta separacion es que ni el cliente ni el server conozcan la logica del envio y lectura de mensajes, situandolos en un archivo distinto.  
+Al estar apretado con el tiempo, dejare este requisito para un refactor futuro, el cual tambien contempla el movimiento de constantes y configuraciones a un archivo distinto.
+

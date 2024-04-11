@@ -1,11 +1,11 @@
 package common
 
 import (
-	"bufio"
 	"fmt"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -51,10 +51,20 @@ func (c *Client) createClientSocket() error {
 	return nil
 }
 
+func getEnvs() []string {
+	envs := []string{
+		os.Getenv("NOMBRE"),
+		os.Getenv("APELLIDO"),
+		os.Getenv("DOCUMENTO"),
+		os.Getenv("NACIMIENTO"),
+		os.Getenv("NUMERO"),
+	}
+	return envs
+}
+
 // StartClientLoop Send messages to the client until some time threshold is met
 func (c *Client) StartClientLoop() {
 	// autoincremental msgID to identify every message sent
-	msgID := 1
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGTERM)
 
@@ -69,7 +79,7 @@ loop:
 			break loop
 
 		case <-sigchan:
-			log.Infof("2 CLIENTE RECIBIO SIGRETMNNOSNDANSD")
+			log.Infof("CLIENTE RECIBIO SIGTERM")
 			c.conn.Close()
 			return
 
@@ -77,34 +87,39 @@ loop:
 		}
 
 		// Create the connection the server in every loop iteration. Send an
+
 		c.createClientSocket()
 
-		// TODO: Modify the send to avoid short-write
-		fmt.Fprintf(
-			c.conn,
-			"[CLIENT %v] Message N°%v\n",
-			c.config.ID,
-			msgID,
-		)
-		msg, err := bufio.NewReader(c.conn).ReadString('\n')
-		msgID++
-		c.conn.Close()
+		bytes_sent := 0
+		data := getEnvs()
 
-		if err != nil {
-			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
+		nombre := data[0]
+		apellido := data[1]
+		dni := data[2]
+		nacimiento := data[3]
+		numero := data[4]
+		msg_to_sv := fmt.Sprintf("|%v|%v|%v|%v|%v|%v", c.config.ID, nombre, apellido, dni, nacimiento, numero) //PONER CONSTANTES
+		header := fmt.Sprintf("%v ", len(msg_to_sv))
+		msg_to_sv = header + msg_to_sv
+
+		// SENDING
+		send_message(c, c.conn, msg_to_sv[bytes_sent:])
+
+		//READING
+		sv_answer := read_message(c, c.conn)
+		answer := strings.Split(sv_answer, " ")
+		if answer[0] == "err" {
+			log.Errorf("action: receive_message | result: fail | client_id: %v | error: could not store bet",
 				c.config.ID,
-				err,
 			)
-			return
+			c.conn.Close()
+			break loop
 		}
-		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
-			c.config.ID,
-			msg,
-		)
-
+		c.conn.Close()
 		// Wait a time between sending one message and the next one
 		time.Sleep(c.config.LoopPeriod)
 	}
+	c.conn.Close()
 
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 }

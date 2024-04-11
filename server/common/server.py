@@ -1,6 +1,8 @@
 import socket
 import logging
 import signal
+from .utils import Bet, store_bets
+from .comms import Comms
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -11,8 +13,7 @@ class Server:
         self.active_clients = {}
         self.running = True
         
-
-    def handle_sigterm(self, signal, handler):
+    def handle_sigterm(self):
         logging.info("HANDLING SIGTERM")
         self.running = False
         for client in self.active_clients.values():
@@ -28,13 +29,13 @@ class Server:
         finishes, servers starts to accept new connections again
         """
         signal.signal(signal.SIGTERM, self.handle_sigterm)
-        # TODO: Modify this program to handle signal to graceful shutdown
-        # the server
 
         while self.running:
             client_sock = self.__accept_new_connection()
             if client_sock:
                 self.__handle_client_connection(client_sock)
+
+
 
     def __handle_client_connection(self, client_sock):
         """
@@ -44,15 +45,26 @@ class Server:
         client socket will also be closed
         """
         try:
-            # TODO: Modify the receive to avoid short-reads
-            msg = client_sock.recv(1024).rstrip().decode('utf-8')
+            comms = Comms(client_sock)
+            msg = comms.full_read().rstrip().decode('utf-8')
+            if not msg: #client disconnected
+                return
             addr = client_sock.getpeername()
             logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
-            # TODO: Modify the send to avoid short-writes
-            client_sock.send("{}\n".format(msg).encode('utf-8'))
+
+            bets = comms.parse_bet(msg)
+            store_bets(bets)
+            
+            for bet in bets:
+                if bet:
+                    comms.full_write(client_sock,f"ack {bet.document} {bet.number}\n")
+                else:
+                    comms.full_write(client_sock,f"err {bet.document} {bet.number}\n")
+
+
         except OSError as e:
-            logging.error("action: receive_message | result: fail | error: {e}")
-        finally:            
+            logging.error(f"action: receive_message | result: fail | error: {e}")
+        finally:
             addr = client_sock.getpeername()
             self.active_clients.pop(addr[0])
             client_sock.close()
@@ -77,4 +89,3 @@ class Server:
                 logging.error("SOCKET CERRADO")
                 return None
 
-        
